@@ -1,0 +1,393 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Schwarzwald Rider 6.2</title><link rel="manifest" href="./manifest.webmanifest"><meta name="theme-color" content="#102b34"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="icon" href="./icons/icon-192.png"><style>
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#8ab6c6;font-family:system-ui;color:white;touch-action:none}canvas{display:block}
+#ui{position:fixed;inset:0;pointer-events:none}#top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px}.panel{background:#091e27c9;border:1px solid #ffffff35;padding:9px 12px;border-radius:12px;backdrop-filter:blur(7px)}.title{font-weight:900;letter-spacing:1px}.tiny{font-size:11px;color:#c8d8da}
+button{pointer-events:auto;border:1px solid #ffffff66;background:#123b47e8;color:white;border-radius:13px;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none}
+#actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:75vw}#actions button{padding:8px;font-size:11px}
+#hud{position:absolute;right:12px;bottom:110px;text-align:center;min-width:145px}#speed{font-size:43px;font-weight:900;line-height:1.1}#speed small{font-size:12px}.accent{color:#9bf0cc}
+#controls{position:absolute;bottom:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:5px;align-items:end}.cluster{display:flex;gap:6px;align-items:end}.control{height:62px;min-width:62px;font-size:19px}.small{height:51px;min-width:52px;font-size:12px}.gas{height:82px;background:#116e53df}.brake{height:72px;background:#913f37df}.pressed{filter:brightness(1.7)}
+#message{position:absolute;top:70px;left:10px;max-width:310px;font-size:12px}.warn{position:fixed;inset:0;background:#102b34;display:none;align-items:center;justify-content:center;text-align:center;padding:25px;z-index:9}
+@media(orientation:portrait) and (max-width:650px){#portrait{display:flex}}@media(max-height:390px){#hud{bottom:80px}#controls .control{height:49px;min-width:52px}#controls .gas{height:65px}#controls .brake{height:60px}#controls .small{height:44px;min-width:43px}#message{display:none}}
+</style></head><body><div id="error" class="warn"><div><h2>3D-Grafik konnte nicht geladen werden</h2><p>Bitte die Datei mit Internetverbindung in Chrome oder Firefox öffnen. Für die 3D-Engine wird Three.js geladen.</p></div></div>
+<div id="portrait" class="warn"><div><h2>📱 ↻ Querformat</h2><p>Bitte das Handy drehen.</p><button id="landscape" style="padding:14px">Vollbild versuchen</button></div></div>
+<div id="ui"><div id="top"><div class="panel"><div class="title">🏍 SCHWARZWALD RIDER 6.2</div><div class="tiny">Nahkamera von oben · Helmkamera · Ninja</div></div><div id="actions"><button id="bikeToggle">50 / 125 ccm</button><button id="modelToggle">🏍 Ninja</button><button id="fpsToggle">FPS ∞</button><button id="qualityToggle">Grafik: Hoch</button><button id="camera">📷 Verfolger</button><button id="sound">🔇 Ton</button><button id="reset">↻</button><button id="fullscreen">⛶</button></div></div><div id="message" class="panel">Bereits im ersten Gang: GAS halten zum Vorwärtsfahren. ◀ links, ▶ rechts. Kein Fahrassistent.</div><div id="hud" class="panel"><div id="speed">0<small> km/h</small></div><div class="accent">Gang <span id="gear">N</span></div><div class="tiny"><span id="rpm">1200</span> U/min · <span id="cc">50</span> ccm · <span id="fpsReadout">0</span> FPS</div></div><div id="controls"><div class="cluster"><button class="control" data-hold="left">◀</button><button class="control" data-hold="right">▶</button></div><div class="cluster"><button class="control small" id="down">−<br>Gang</button><button class="control small" id="up">+<br>Gang</button></div><div class="cluster"><button class="control brake" data-hold="brake">BREMSE</button><button class="control gas" data-hold="gas">GAS</button></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script><script>
+if(typeof THREE==='undefined'){document.getElementById('error').style.display='flex';}else{start()}
+function start(){
+const $=id=>document.getElementById(id);
+let renderer;try{renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});}catch(e){$('error').style.display='flex';return}
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=false;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.18;document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x96c3d7);scene.fog=new THREE.FogExp2(0xb4cbd1,.0025);
+// Atmospheric mountain silhouettes and soft clouds.
+const skyGeo=new THREE.SphereGeometry(900,32,16);
+const skyMat=new THREE.MeshBasicMaterial({color:0x9dc5db,side:THREE.BackSide,depthWrite:false});
+const skyDome=new THREE.Mesh(skyGeo,skyMat);scene.add(skyDome);
+const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.1,1300);
+scene.add(new THREE.HemisphereLight(0xddefff,0x43623c,2.2));const sun=new THREE.DirectionalLight(0xffe5b1,2.5);sun.position.set(-100,150,-180);sun.castShadow=false;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-160;sun.shadow.camera.right=160;sun.shadow.camera.top=160;sun.shadow.camera.bottom=-160;scene.add(sun);
+const mat=(color,roughness=1,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
+// Procedural asphalt with tiny mineral flecks and longitudinal wear.
+const asphaltCanvas=document.createElement('canvas');asphaltCanvas.width=512;asphaltCanvas.height=512;
+const ac=asphaltCanvas.getContext('2d');ac.fillStyle='#25282a';ac.fillRect(0,0,512,512);
+let asphaltSeed=1337;function arand(){asphaltSeed=(1664525*asphaltSeed+1013904223)>>>0;return asphaltSeed/4294967296}
+for(let i=0;i<32000;i++){let g=30+Math.floor(arand()*48);ac.fillStyle=`rgba(${g},${g},${g},${.09+arand()*.22})`;ac.fillRect(arand()*512,arand()*512,arand()*2.5+.5,arand()*2+.5)}
+for(let i=0;i<100;i++){ac.fillStyle='rgba(12,13,14,.09)';ac.fillRect(arand()*512,0,1+arand()*2,512)}
+const asphaltTexture=new THREE.CanvasTexture(asphaltCanvas);asphaltTexture.wrapS=asphaltTexture.wrapT=THREE.RepeatWrapping;asphaltTexture.repeat.set(2,120);
+const roadMat=new THREE.MeshStandardMaterial({map:asphaltTexture,color:0xd8d8d8,roughness:.98,side:THREE.DoubleSide}),edgeMat=mat(0xe2d9c5),lineMat=mat(0xf0e9c8),soil=mat(0x8a7d65),grass=mat(0x4c8250),darkGrass=mat(0x315e37),pine=mat(0x174c39),pine2=mat(0x246348),wood=mat(0x5c4330),roof=mat(0x583b35),wall=mat(0xe5d5b3),glass=mat(0x6e9cb0,.15),black=mat(0x14191c),rubber=mat(0x111416),metal=mat(0x879397,.4,.65),red=mat(0xc9212b,.35),blue=mat(0x168dc2,.35);
+function mesh(geo,m,parent=scene){let o=new THREE.Mesh(geo,m);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
+function box(w,h,d,m,parent,x=0,y=0,z=0){let o=mesh(new THREE.BoxGeometry(w,h,d),m,parent);o.position.set(x,y,z);return o}
+function cyl(rt,rb,h,m,parent,x,y,z,seg=9){let o=mesh(new THREE.CylinderGeometry(rt,rb,h,seg),m,parent);o.position.set(x,y,z);return o}
+function height(x,z){return Math.sin(x*.013)*4+Math.cos(z*.009)*5+Math.sin(x*.03+z*.018)*1.5}
+function roadX(z){
+ // Wide bends combined with tighter mountain-road turns.
+ return 29*Math.sin(z*.008)+15*Math.sin(z*.017+0.7)+7*Math.sin(z*.031+1.3)+3*Math.sin(z*.048+.5);
+}
+function roadY(z){
+ // Gradual climbs and descents; no sudden jumps at segment boundaries.
+ return 12+26*Math.sin(z*.0052)+12*Math.sin(z*.012+0.3)+5*Math.sin(z*.022);
+}
+function terrainHeight(x,z){
+ let d=Math.abs(x-roadX(z));
+ let blend=Math.min(1,Math.max(0,(d-8)/34));
+ blend=blend*blend*(3-2*blend);
+ let natural=height(x,z)+Math.pow(Math.max(0,d-12)/140,1.5)*15;
+ return roadY(z)-1.15+(natural-roadY(z)+1.15)*blend;
+}
+const N=1600,step=2.5;
+const positions=[],uv=[],indices=[];
+for(let i=0;i<=N;i++){let z=-i*step;let center=roadX(z),y=roadY(z);for(let j=0;j<9;j++){let off=[-6.7,-6.1,-5.9,-5.45,0,5.45,5.9,6.1,6.7][j];let tangent=(roadX(z+1)-roadX(z-1))*.5,inv=1/Math.hypot(1,tangent);
+positions.push(center+off*inv,y+(Math.abs(off)>5.9?-.06:.02),z-off*tangent*inv);uv.push(j/8,i/1600)}}
+for(let i=0;i<N;i++)for(let j=0;j<8;j++){let a=i*9+j,b=a+9;indices.push(a,a+1,b,b,a+1,b+1)}
+const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));rg.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));rg.setIndex(indices);rg.computeVertexNormals();
+const roadMaterials=[soil,edgeMat,roadMat,roadMat,roadMat,roadMat,roadMat,edgeMat];for(let i=0;i<N;i++)for(let j=0;j<8;j++)rg.addGroup((i*8+j)*6,6,j);
+mesh(rg,roadMaterials);
+// Painted markings are tessellated along the real road centerline.
+function roadPaint(offset,width,start,end){
+ const verts=[],faces=[];
+ for(let z=start;z>=end;z-=2){
+   const tangent=(roadX(z+1)-roadX(z-1))/2;
+   const inv=1/Math.hypot(1,tangent);
+   for(const edge of [-1,1]){
+     const o=offset+edge*width/2;
+     verts.push(roadX(z)+o*inv,roadY(z)+.115,z-o*tangent*inv);
+   }
+ }
+ const count=verts.length/6;
+ for(let i=0;i<count-1;i++){const a=i*2;faces.push(a,a+1,a+2,a+1,a+3,a+2)}
+ const g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+ g.setIndex(faces);g.computeVertexNormals();
+ mesh(g,new THREE.MeshBasicMaterial({color:0xf4ecd6,side:THREE.DoubleSide,depthWrite:false}));
+}
+for(let z=-12;z>-3970;z-=23)roadPaint(0,.17,z,z-12);
+roadPaint(-5.12,.13,0,-3990);roadPaint(5.12,.13,0,-3990);
+const terrainGeo=new THREE.PlaneGeometry(1400,4400,80,185);terrainGeo.rotateX(-Math.PI/2);terrainGeo.translate(0,0,-2000);
+let a=terrainGeo.attributes.position;for(let i=0;i<a.count;i++){
+ let x=a.getX(i),z=a.getZ(i);a.setY(i,terrainHeight(x,z))
+}terrainGeo.computeVertexNormals();
+mesh(terrainGeo,grass);
+function rng(seed){let x=seed;return()=>{x=(x*1664525+1013904223)>>>0;return x/4294967296}}const random=rng(2901);
+const trunkGeo=new THREE.CylinderGeometry(.14,.2,2,6),leafGeo=new THREE.ConeGeometry(1,3.4,7);
+const treeCount=2600;
+const trunks=new THREE.InstancedMesh(trunkGeo,wood,treeCount);
+const needles1=new THREE.InstancedMesh(leafGeo,pine,treeCount);
+const needles2=new THREE.InstancedMesh(leafGeo,pine2,treeCount);
+const dummy=new THREE.Object3D();
+let count1=0,count2=0;
+for(let i=0;i<treeCount;i++){
+ let z=30-random()*4020,side=random()<.5?-1:1,offset=10+random()*205,x=roadX(z)+side*offset;
+ let y=terrainHeight(x,z),h=2.5+random()*6.3;
+ dummy.position.set(x,y+h*.22,z);dummy.scale.set(h*.22,h*.55,h*.22);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);
+ dummy.position.set(x,y+h*1.08,z);dummy.scale.set(h*.88,h*.95,h*.88);dummy.updateMatrix();
+ if(random()<.5)needles1.setMatrixAt(count1++,dummy.matrix);else needles2.setMatrixAt(count2++,dummy.matrix);
+}
+needles1.count=count1;needles2.count=count2;
+for(const obj of [trunks,needles1,needles2]){obj.instanceMatrix.needsUpdate=true;obj.frustumCulled=false;scene.add(obj)}
+// Extra forest undergrowth and mossy boulders.
+const stoneMat=mat(0x68716c,.98),shrubMat=mat(0x376f3d,.98);
+const stoneGeo=new THREE.DodecahedronGeometry(1,0),shrubGeo=new THREE.IcosahedronGeometry(1,0);
+const stones=new THREE.InstancedMesh(stoneGeo,stoneMat,900),shrubs=new THREE.InstancedMesh(shrubGeo,shrubMat,1800);
+const scatter=new THREE.Object3D();
+for(let i=0;i<2700;i++){
+ let z=-Math.random()*3980,x=roadX(z)+(Math.random()<.5?-1:1)*(8+Math.random()*115);
+ let y=terrainHeight(x,z),scale=.3+Math.random()*1.4;
+ scatter.position.set(x,y+scale*.3,z);
+ scatter.scale.set(scale,scale*(.4+Math.random()*.4),scale);
+ scatter.rotation.set(Math.random()*.3,Math.random()*6.28,Math.random()*.3);scatter.updateMatrix();
+ if(i<900)stones.setMatrixAt(i,scatter.matrix);else shrubs.setMatrixAt(i-900,scatter.matrix);
+}
+for(const inst of [stones,shrubs]){inst.instanceMatrix.needsUpdate=true;inst.frustumCulled=false;scene.add(inst)}
+// Far ridgelines frame the valley, with muted colors from atmospheric perspective.
+const mountainMat=mat(0x738f88,1),mountainMat2=mat(0x597a73,1);
+for(let side of [-1,1])for(let i=0;i<20;i++){
+ let z=100-i*215,x=side*(220+Math.sin(i*1.9)*45),h=35+Math.sin(i*1.8)*15+Math.random()*35;
+ let m=mesh(new THREE.ConeGeometry(100,h,5),i%2?mountainMat:mountainMat2);
+ m.position.set(x,h*.33,z);m.rotation.y=i*.71;m.castShadow=false;
+}
+for(let i=0;i<23;i++){let z=-160-i*140,side=i%2?1:-1,x=roadX(z)+side*(27+random()*25),y=height(x,z);let d=Math.abs(x-roadX(z));y=roadY(z)-.8+(y+Math.pow(Math.max(0,d-12)/140,1.5)*15-roadY(z))*Math.min(1,Math.max(0,(d-7)/30));let h=box(10,6,8,wall,scene,x,y+3,z);let r=mesh(new THREE.ConeGeometry(8,4,4),roof);r.rotation.y=Math.PI/4;r.position.set(x,y+8,z);box(2,2,.1,glass,scene,x-2,y+4,z+4.08);box(2,2,.1,glass,scene,x+2,y+4,z+4.08)}
+for(let i=0;i<125;i++){let z=-i*32,x=roadX(z),y=roadY(z);for(let s of [-1,1]){let p=box(.16,1.1,.17,edgeMat,scene,x+s*7,y+.55,z);box(.2,.25,.2,black,scene,x+s*7,y+.8,z)}}
+const bike=new THREE.Group();scene.add(bike);const modelForward=new THREE.Group();bike.add(modelForward);modelForward.rotation.y=Math.PI;const body=new THREE.Group();modelForward.add(body);body.rotation.order="YXZ";
+const wheels=[],wheelGroups=[];
+for(let z of [-1.15,1.25]){
+ let group=new THREE.Group();group.position.set(0,.73,z);body.add(group);wheelGroups.push(group);
+ let spin=new THREE.Group();group.add(spin);wheels.push(spin);
+ let tire=mesh(new THREE.TorusGeometry(.62,.16,12,28),rubber,spin);tire.rotation.y=Math.PI/2;
+ let hub=cyl(.23,.23,.19,metal,spin,0,0,0);hub.rotation.z=Math.PI/2;
+ for(let a=0;a<8;a++){let spoke=box(.045,.9,.055,metal,spin);spoke.rotation.x=a*Math.PI/8}
+ let disc=cyl(.38,.38,.045,metal,spin,.13,0,0,24);disc.rotation.z=Math.PI/2;
+}
+const fork=new THREE.Group();body.add(fork);
+for(let x of [-.29,.29]){let tube=cyl(.055,.055,1.4,metal,fork,x,1.35,1.16);tube.rotation.x=-.18}
+const headlamp=box(.35,.14,.08,mat(0xf7efc6,.2),body,0,1.6,1.8);
+const exhaust=box(.22,.24,1.1,metal,body,.53,1.05,-.7);exhaust.rotation.x=-.13;
+const rearShock=box(.12,.75,.13,metal,body,.36,1.22,-.95);rearShock.rotation.x=.5;
+box(.8,.45,1.6,black,body,0,1.15,.1);box(.72,.46,1.05,red,body,0,1.55,-.12);
+let fairing=mesh(new THREE.ConeGeometry(.59,1.55,4),red,body);fairing.rotation.x=Math.PI/2;fairing.rotation.y=Math.PI/4;fairing.position.set(0,1.45,1.05);
+box(.68,.2,.85,black,body,0,1.77,-.9);box(.68,.2,.18,red,body,0,1.55,-1.65);
+box(.9,.1,.13,metal,body,0,2.03,1.05);box(.34,.25,.08,glass,body,0,1.73,1.8);box(.45,.16,.08,red,body,0,1.55,-1.72);
+// Sportbike 4.2: sculpted fuel tank, aerodynamic fairing, mirrors, tail and detailed frame
+const paint=red,seat=mat(0x161a1d,.92),silver=mat(0xb4bec4,.35,.7),lamp=mat(0xe6f3f7,.2),dark=mat(0x22272c);
+function segment(parent,from,to,r,m){const a=new THREE.Vector3(...from),b=new THREE.Vector3(...to),v=b.clone().sub(a);const obj=mesh(new THREE.CylinderGeometry(r,r,v.length(),9),m,parent);obj.position.copy(a.add(b).multiplyScalar(.5));obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize());return obj}
+const tank=mesh(new THREE.SphereGeometry(1,18,12),paint,body);tank.position.set(0,1.75,-.2);tank.scale.set(.48,.28,.68);
+const nose=mesh(new THREE.SphereGeometry(1,16,10),paint,body);nose.position.set(0,1.45,1.12);nose.scale.set(.46,.4,.66);
+for(const side of [-1,1]){
+ let sideFair=mesh(new THREE.SphereGeometry(1,14,10),paint,body);
+ sideFair.position.set(side*.42,1.28,.65);sideFair.scale.set(.13,.38,.84);
+ segment(body,[side*.34,1.17,-1.08],[side*.43,1.1,.65],.055,silver);
+ segment(body,[side*.37,1.1,-.85],[side*.32,.82,1.25],.05,silver);
+ segment(body,[side*.22,1.8,1.05],[side*.8,2.05,1.15],.035,black);
+ const mirror=mesh(new THREE.SphereGeometry(.19,12,8),black,body);
+ mirror.position.set(side*.85,2.06,1.2);mirror.scale.set(1.3,.45,.65);
+ const light=box(.25,.1,.07,lamp,body,side*.23,1.56,1.73);
+ segment(body,[side*.29,1.95,.8],[side*.28,.83,1.3],.07,silver);
+ segment(body,[side*.34,1.55,-1.0],[side*.39,1.2,-1.5],.045,silver);
+}
+const windshield=mesh(new THREE.SphereGeometry(1,14,10),glass,body);
+windshield.position.set(0,1.94,1.28);windshield.scale.set(.35,.31,.12);
+const tail=mesh(new THREE.ConeGeometry(.48,1.2,4),paint,body);tail.rotation.x=-Math.PI/2;tail.rotation.y=Math.PI/4;tail.position.set(0,1.69,-1.38);
+const seatPad=mesh(new THREE.SphereGeometry(1,12,8),seat,body);seatPad.position.set(0,1.89,-.92);seatPad.scale.set(.37,.09,.51);
+const muffler=mesh(new THREE.CylinderGeometry(.16,.21,.9,12),silver,body);
+muffler.rotation.x=Math.PI/2;muffler.position.set(.53,1.05,-1.03);
+const brakeLight=box(.38,.1,.07,red,body,0,1.69,-1.94);
+// Additional sculpted sportbike details (procedural, no external model required).
+const carbon=mat(0x171d22,.58),alloy=mat(0xc3ced4,.27,.78),indicator=mat(0xffaa32,.35),engineDark=mat(0x33383c,.7,.45);
+const engineBlock=mesh(new THREE.BoxGeometry(.64,.53,.78),engineDark,body);engineBlock.position.set(0,1.12,-.04);
+for(const side of [-1,1]){
+ const fairPanel=mesh(new THREE.SphereGeometry(1,24,16),paint,body);
+ fairPanel.position.set(side*.42,1.43,.55);fairPanel.scale.set(.12,.37,.83);
+ const vent=mesh(new THREE.BoxGeometry(.015,.08,.39),carbon,body);vent.position.set(side*.535,1.3,.54);
+ for(let k=0;k<3;k++)segment(body,[side*.55,1.2+k*.09,.28],[side*.55,1.2+k*.09,.7],.012,alloy);
+ const frontIndicator=mesh(new THREE.SphereGeometry(.08,10,8),indicator,body);
+ frontIndicator.position.set(side*.53,1.58,1.5);
+ const rearIndicator=mesh(new THREE.SphereGeometry(.07,10,8),indicator,body);
+ rearIndicator.position.set(side*.44,1.66,-1.65);
+ const footPeg=segment(body,[side*.39,1.07,-.38],[side*.68,1.07,-.38],.045,alloy);
+ const engineCover=mesh(new THREE.CylinderGeometry(.31,.31,.08,20),alloy,body);
+ engineCover.rotation.z=Math.PI/2;engineCover.position.set(side*.39,1.13,-.12);
+}
+const instrumentPanel=mesh(new THREE.BoxGeometry(.38,.12,.22),carbon,body);instrumentPanel.position.set(0,1.96,1.08);
+const instrumentDisplay=mesh(new THREE.BoxGeometry(.27,.015,.12),lamp,body);instrumentDisplay.position.set(0,2.025,1.08);
+const exhaustTip=mesh(new THREE.CylinderGeometry(.115,.125,.18,18),carbon,body);exhaustTip.rotation.x=Math.PI/2;exhaustTip.position.set(.53,1.05,-1.55);
+// A distinct, stylized Ninja-inspired sportbike kit (original geometry, no brand logo).
+const ninjaGreen=mat(0x48d322,.24,.18),ninjaBlack=mat(0x10171a,.4,.12),ninjaSilver=mat(0xb3c0c6,.26,.65);
+const ninjaKit=new THREE.Group();body.add(ninjaKit);ninjaKit.visible=false;
+for(const side of [-1,1]){
+ const wing=mesh(new THREE.SphereGeometry(1,22,14),ninjaGreen,ninjaKit);
+ wing.position.set(side*.49,1.39,.77);wing.scale.set(.13,.37,.96);
+ const lower=mesh(new THREE.SphereGeometry(1,18,12),ninjaBlack,ninjaKit);
+ lower.position.set(side*.45,1.07,.28);lower.scale.set(.14,.18,.87);
+ const stripe=box(.018,.045,.8,ninjaSilver,ninjaKit,side*.624,1.51,.75);
+ stripe.rotation.x=-.19;
+ const fin=box(.34,.055,.45,ninjaBlack,ninjaKit,side*.59,1.27,1.18);
+ fin.rotation.z=side*.17;
+ const lamp=box(.22,.11,.045,mat(0xe6f5ff,.14),ninjaKit,side*.24,1.57,1.82);
+ lamp.rotation.y=side*.23;
+}
+const ninjaNose=mesh(new THREE.SphereGeometry(1,20,14),ninjaGreen,ninjaKit);
+ninjaNose.position.set(0,1.49,1.28);ninjaNose.scale.set(.47,.34,.66);
+const ninjaScreen=mesh(new THREE.SphereGeometry(1,20,12),mat(0x263e48,.12),ninjaKit);
+ninjaScreen.position.set(0,1.98,1.37);ninjaScreen.scale.set(.32,.30,.13);
+const ninjaTail=mesh(new THREE.SphereGeometry(1,16,10),ninjaGreen,ninjaKit);
+ninjaTail.position.set(0,1.76,-1.43);ninjaTail.scale.set(.4,.17,.62);
+let ninjaSelected=false;
+function isInNinjaKit(o){for(let p=o.parent;p;p=p.parent)if(p===ninjaKit)return true;return false}
+function updateBikePaint(){
+ const target=ninjaSelected?ninjaGreen:(cc===50?red:blue);
+ body.traverse(o=>{if(o.isMesh && !isInNinjaKit(o) && (o.material===red||o.material===blue||o.material===ninjaGreen))o.material=target});
+ ninjaKit.visible=ninjaSelected;
+ $('modelToggle').textContent=ninjaSelected?'🏍 Ninja 180':'🏍 Ninja';
+}
+const rider=new THREE.Group();body.add(rider);box(.73,.9,.46,mat(0x26353c),rider,0,2.3,-.3);let helmet=mesh(new THREE.SphereGeometry(.39,12,9),black,rider);helmet.position.set(0,2.96,-.08);box(.5,.15,.05,glass,rider,0,2.98,.27);
+const limbs=[];
+for(const side of [-1,1]){
+ limbs.push(segment(rider,[side*.32,2.47,-.2],[side*.33,1.94,.95],.105,black));
+ limbs.push(segment(rider,[side*.29,2.04,-.55],[side*.41,1.31,-.72],.14,black));
+ limbs.push(segment(rider,[side*.41,1.31,-.72],[side*.48,1.12,-.17],.105,black));
+}
+let cc=50,gear=1,speed=0,lean=0,camMode=0,rev=1200,engineTime=0,brakeAmount=0;
+const startZ=-45;const initialHeading=Math.atan2(roadX(startZ-5)-roadX(startZ+5),10);
+let worldZ=startZ,worldX=roadX(startZ),heading=initialHeading,steerSmoothed=0,leanVelocity=0,slopePitch=0;const held={left:false,right:false,gas:false,brake:false};
+// Procedural engine sound. WebAudio must be unlocked by a user gesture on mobile.
+let audioCtx=null,engineOsc=null,engineGain=null,engineFilter=null,windNoise=null,windGain=null,soundEnabled=false;
+function initSound(){
+ try{
+  if(!audioCtx){
+   const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+   audioCtx=new AC();engineOsc=audioCtx.createOscillator();engineOsc.type='sawtooth';
+   engineFilter=audioCtx.createBiquadFilter();engineFilter.type='lowpass';engineFilter.frequency.value=320;
+   engineGain=audioCtx.createGain();engineGain.gain.value=0;
+   engineOsc.connect(engineFilter);engineFilter.connect(engineGain);engineGain.connect(audioCtx.destination);engineOsc.start();
+   const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate);
+   const data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*.65;
+   windNoise=audioCtx.createBufferSource();windNoise.buffer=buffer;windNoise.loop=true;
+   const windFilter=audioCtx.createBiquadFilter();windFilter.type='highpass';windFilter.frequency.value=550;
+   windGain=audioCtx.createGain();windGain.gain.value=0;
+   windNoise.connect(windFilter);windFilter.connect(windGain);windGain.connect(audioCtx.destination);windNoise.start();
+  }
+  if(audioCtx.state==='suspended')audioCtx.resume();
+ }catch(e){console.warn('Audio not available',e)}
+}
+function updateSound(){
+ if(!audioCtx||!engineOsc)return;
+ const t=audioCtx.currentTime;
+ engineOsc.frequency.setTargetAtTime(Math.max(42,rev/(cc===50?52:72)),t,.045);
+ engineFilter.frequency.setTargetAtTime(220+rev*.18+(held.gas?650:0),t,.09);
+ engineGain.gain.setTargetAtTime(soundEnabled?(.022+(held.gas?.055:.018)):0,t,.09);
+ windGain.gain.setTargetAtTime(soundEnabled?Math.min(.09,speed*.0006):0,t,.15);
+}
+$('sound').onclick=()=>{initSound();soundEnabled=!soundEnabled;$('sound').textContent=soundEnabled?'🔊 Ton':'🔇 Ton';};
+const setHold=(k,v)=>{held[k]=v;document.querySelectorAll('[data-hold="'+k+'"]').forEach(el=>el.classList.toggle('pressed',v))};
+document.querySelectorAll('[data-hold]').forEach(b=>{let k=b.dataset.hold;b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);setHold(k,true)});for(let t of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(t,()=>setHold(k,false))});
+$('up').onclick=()=>gear=Math.min(6,gear+1);$('down').onclick=()=>gear=Math.max(0,gear-1);
+$('bikeToggle').onclick=()=>{cc=cc===50?125:50;$('cc').textContent=cc;speed=Math.min(speed,ninjaSelected?180:(cc===50?50:120));updateBikePaint()};
+$('modelToggle').onclick=()=>{ninjaSelected=!ninjaSelected;speed=Math.min(speed,ninjaSelected?180:(cc===50?50:120));updateBikePaint()};
+const fpsOptions=[0,30,60,90,120],fpsNames=['∞','30','60','90','120'];
+let fpsIndex=0,lastFrame=0,actualFps=0,fpsCount=0,fpsStart=0;
+const qualityModes=[{name:'Hoch',ratio:1.5,adaptive:true},{name:'Ultra',ratio:2,adaptive:false},{name:'Auto',ratio:1.25,adaptive:true},{name:'Schnell',ratio:.8,adaptive:false}];
+let qualityIndex=0,renderScale=qualityModes[0].ratio,slowIntervals=0,fastIntervals=0;
+function applyRenderScale(){renderer.setPixelRatio(Math.min(devicePixelRatio||1,renderScale));renderer.setSize(innerWidth,innerHeight);}
+$('qualityToggle').onclick=()=>{qualityIndex=(qualityIndex+1)%qualityModes.length;renderScale=qualityModes[qualityIndex].ratio;slowIntervals=fastIntervals=0;applyRenderScale();$('qualityToggle').textContent='Grafik: '+qualityModes[qualityIndex].name;};
+applyRenderScale();
+
+$('fpsToggle').onclick=()=>{fpsIndex=(fpsIndex+1)%fpsOptions.length;$('fpsToggle').textContent='FPS '+fpsNames[fpsIndex];lastFrame=0};
+$('camera').onclick=()=>{camMode=(camMode+1)%2;$('camera').textContent=camMode===0?'📷 Verfolger':'🪖 Helmkamera';rider.visible=camMode===0;};
+$('reset').onclick=()=>{speed=0;worldZ=startZ;worldX=roadX(startZ);heading=initialHeading;steerSmoothed=0;lean=0;leanVelocity=0;slopePitch=0;gear=1;cameraHeading=initialHeading;helmetRoll=0;camTarget.set(worldX,roadY(startZ)+3.8,startZ+6.4);cameraLook.set(worldX,roadY(startZ)+1.8,startZ-12);for(let k in held)setHold(k,false)};
+async function full(){try{await document.documentElement.requestFullscreen();await screen.orientation?.lock?.('landscape')}catch(e){}}
+$('fullscreen').onclick=full;$('landscape').onclick=full;
+addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['arrowleft','a'].includes(k))setHold('left',true);if(['arrowright','d'].includes(k))setHold('right',true);if(['arrowup','w',' '].includes(k))setHold('gas',true);if(['arrowdown','s'].includes(k))setHold('brake',true);if(k==='e'&&!e.repeat)gear=Math.min(6,gear+1);if(k==='q'&&!e.repeat)gear=Math.max(0,gear-1);if(k.startsWith('arrow')||k===' ')e.preventDefault()});
+addEventListener('keyup',e=>{let k=e.key.toLowerCase();if(['arrowleft','a'].includes(k))setHold('left',false);if(['arrowright','d'].includes(k))setHold('right',false);if(['arrowup','w',' '].includes(k))setHold('gas',false);if(['arrowdown','s'].includes(k))setHold('brake',false)});
+addEventListener('blur',()=>{for(let k in held)setHold(k,false)});
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyRenderScale()});
+const clock=new THREE.Clock(),camTarget=new THREE.Vector3(worldX,roadY(startZ)+4,startZ+11),look=new THREE.Vector3(worldX,roadY(startZ)+1.8,startZ-12);
+const cameraLook=new THREE.Vector3().copy(look);
+let cameraHeading=initialHeading;
+let helmetRoll=0;
+function animate(now=0){
+ requestAnimationFrame(animate);
+ // Unlimited uses the display's native refresh; other options are optional caps.
+ const cap=fpsOptions[fpsIndex];
+ if(cap && lastFrame && now-lastFrame<1000/cap-.5)return;
+ lastFrame=now;
+ let dt=Math.min(clock.getDelta(),.05),max=ninjaSelected?180:(cc===50?50:120);
+ fpsCount++;
+ if(now-fpsStart>=1200){
+ actualFps=Math.round(fpsCount*1000/Math.max(1,now-fpsStart));fpsCount=0;fpsStart=now;
+ if(actualFps<25){slowIntervals++;fastIntervals=0;}else if(actualFps>52){fastIntervals++;slowIntervals=0;}else{slowIntervals=0;fastIntervals=0;}
+ if(qualityModes[qualityIndex].adaptive&&slowIntervals>=2&&renderScale>.75){renderScale=Math.max(.75,renderScale-.15);applyRenderScale();slowIntervals=0;}
+ if(qualityModes[qualityIndex].adaptive&&fastIntervals>=4&&renderScale<qualityModes[qualityIndex].ratio){renderScale=Math.min(qualityModes[qualityIndex].ratio,renderScale+.1);applyRenderScale();fastIntervals=0;}
+}
+
+let ratio=gear?Math.min(1.7,speed/([0,16,29,43,59,78,102][gear]*(ninjaSelected?1.65:(cc===50?.55:1)))):0;
+rev=Math.round(gear?1200+ratio*8200:(held.gas?4500:1200));
+if(held.gas&&gear>0&&speed<max){let power=(ninjaSelected?34:(cc===50?11:18))*(1-Math.pow(speed/max,1.9));if(rev>10100&&!ninjaSelected)power*=.16;speed+=Math.max(0,power)*dt}
+speed=Math.max(0,Math.min(max,speed-dt*(held.brake?26:.32+speed*.006)));
+// No road-following assist: heading and position depend only on rider input.
+const steer=(held.right?1:0)-(held.left?1:0);
+const v=speed/3.6;
+steerSmoothed+=(steer-steerSmoothed)*Math.min(1,dt*8);
+// Steering authority decreases with speed; heading changes in the requested direction.
+// Positive heading is a right turn, negative heading is a left turn.
+const turnRate=(.95/(1+v*.065))*Math.min(1,v/1.8);
+const yawRate=steerSmoothed*turnRate;
+heading+=yawRate*dt;
+const travel=v*dt;
+// Forward is local -Z, matching the visible front wheel and headlight.
+worldX+=Math.sin(heading)*travel;
+worldZ-=Math.cos(heading)*travel;
+if(worldZ < -3975){worldZ=startZ;worldX=roadX(startZ);heading=initialHeading;speed=0;}
+const tangent=(roadX(worldZ+1)-roadX(worldZ-1))*.5;
+const normalInv=1/Math.hypot(1,tangent);
+const roadOffset=(worldX-roadX(worldZ))*normalInv;
+const offroad=Math.abs(roadOffset)>5.55;
+const yRoad=roadY(worldZ);
+const yGround=terrainHeight(worldX,worldZ)+1.15;
+const y=offroad?Math.max(yRoad-.65,yGround):yRoad;
+if(offroad)speed=Math.max(0,speed-dt*(4+speed*.09));
+// Bank the motorcycle INTO the turn; damping stops oscillations.
+// Positive right steering -> positive visual banking in the model's current axes.
+const leanTarget=THREE.MathUtils.clamp(yawRate*v*.19,-.82,.82);
+leanVelocity+=(leanTarget-lean)*dt*32;
+leanVelocity*=Math.exp(-dt*10);
+lean+=leanVelocity*dt;
+engineTime+=dt;updateSound();
+let roadVibration=(Math.sin(engineTime*24)*.006+Math.sin(engineTime*11)*.009)*Math.min(1,speed/20);
+let engineVibration=Math.sin(engineTime*(18+rev/350))*.004*Math.min(1,rev/6000);
+brakeAmount+=(Number(held.brake)-brakeAmount)*Math.min(1,dt*7);
+bike.position.set(worldX,y,worldZ);skyDome.position.set(worldX,0,worldZ);
+body.position.y=-brakeAmount*.065+roadVibration+engineVibration;
+body.rotation.z=lean;
+// Model's front is local -Z; Three.js positive Y turns -Z toward -X.
+// The movement formula turns right toward +X, so model yaw must be negative.
+bike.rotation.y=-heading;
+// Calculate the true longitudinal road slope under the front and rear wheels.
+// This follows the heading, not just the global Z axis, and smooths over road tessellation.
+const axleSpan=3.0;
+const frontZ=worldZ-Math.cos(heading)*axleSpan*.5;
+const rearZ=worldZ+Math.cos(heading)*axleSpan*.5;
+const frontX=worldX+Math.sin(heading)*axleSpan*.5;
+const rearX=worldX-Math.sin(heading)*axleSpan*.5;
+const frontH=offroad?terrainHeight(frontX,frontZ)+1.15:roadY(frontZ);
+const rearH=offroad?terrainHeight(rearX,rearZ)+1.15:roadY(rearZ);
+const targetPitch=THREE.MathUtils.clamp(Math.atan2(frontH-rearH,axleSpan),-.55,.55);
+slopePitch+=(targetPitch-slopePitch)*(1-Math.exp(-dt*9));
+// The visual motorcycle's nose is constructed toward local +Z.
+// A positive X rotation lowers +Z; invert the longitudinal road pitch
+// so a downhill road lowers the nose, and an uphill road raises it.
+body.rotation.x=-slopePitch+brakeAmount*.025-(held.gas?.012:0);
+// The visible fork and front wheel steer together with the actual heading change.
+wheelGroups[1].rotation.y=-steerSmoothed*.3;
+fork.rotation.y=-steerSmoothed*.3;
+for(let w of wheels)w.rotation.x-=speed*dt/3.6/.62;
+rider.rotation.z=lean*.10;
+rider.rotation.x=brakeAmount*.025;
+// Smooth yaw with wraparound, position, and look target independently.
+const angleError=Math.atan2(Math.sin(heading-cameraHeading),Math.cos(heading-cameraHeading));
+cameraHeading+=angleError*(1-Math.exp(-dt*3.0));
+const backX=-Math.sin(cameraHeading),backZ=Math.cos(cameraHeading);
+if(camMode===0){
+ // Close third-person camera, still visibly above and behind the bike.
+ const targetPos=new THREE.Vector3(worldX+backX*6.4,y+3.85,worldZ+backZ*6.4);
+ camTarget.lerp(targetPos,1-Math.exp(-dt*4.0));
+ look.set(worldX+Math.sin(cameraHeading)*14,y+1.5,worldZ-Math.cos(cameraHeading)*14);
+ cameraLook.lerp(look,1-Math.exp(-dt*5));
+ if(camera.fov!==67){camera.fov=67;camera.updateProjectionMatrix();}
+ }else{
+ // Rider eye position, just ahead of the helmet visor; view follows road slope.
+ const eyeForward=.48;
+ const eyePos=new THREE.Vector3(worldX+Math.sin(heading)*eyeForward,y+2.89,worldZ-Math.cos(heading)*eyeForward);
+ camTarget.lerp(eyePos,1-Math.exp(-dt*15));
+ const ahead=28;
+ look.set(worldX+Math.sin(heading)*(ahead+eyeForward),y+2.89+Math.tan(slopePitch)*ahead,worldZ-Math.cos(heading)*(ahead+eyeForward));
+ cameraLook.lerp(look,1-Math.exp(-dt*12));
+ if(camera.fov!==78){camera.fov=78;camera.updateProjectionMatrix();}
+ }
+ camera.position.copy(camTarget);
+ // Helmet view banks with the motorcycle instead of remaining level.
+ // Ease in and out so it feels attached to the rider without sudden snapping.
+ const desiredHelmetRoll=camMode===1?THREE.MathUtils.clamp(lean*.88,-.68,.68):0;
+ helmetRoll+=(desiredHelmetRoll-helmetRoll)*(1-Math.exp(-dt*9));
+ const rollHeading=camMode===1?heading:cameraHeading;
+ camera.up.set(Math.cos(rollHeading)*Math.sin(helmetRoll),Math.cos(helmetRoll),Math.sin(rollHeading)*Math.sin(helmetRoll));
+ camera.lookAt(cameraLook);
+$('speed').innerHTML=Math.round(speed)+'<small> km/h</small>';$('gear').textContent=gear||'N';$('rpm').textContent=rev.toLocaleString('de-DE');$('fpsReadout').textContent=actualFps;renderer.render(scene,camera)}
+animate();
+}
+</script><script>if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(console.warn));}</script></body></html>
